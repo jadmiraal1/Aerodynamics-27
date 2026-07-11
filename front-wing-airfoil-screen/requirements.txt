@@ -1,0 +1,11 @@
+# FSAE front-wing airfoil screen - tested versions (Jul 2026)
+# Core aero (pinned: results should be reproducible across machines)
+neuralfoil==0.3.2
+aerosandbox==4.2.10
+
+# Supporting
+numpy>=1.24
+pandas>=2.0
+openpyxl>=3.1
+matplotlib>=3.7
+tqdm>=4.65
