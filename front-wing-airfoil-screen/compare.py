@@ -13,6 +13,10 @@ Usage (after a screen run):
   python compare.py                        # reads screen_results/
   python compare.py --results other_dir --top 10
 Outputs: <results>/compare_<profile>.png
+
+Geometry comes from kulfan_params.json - the exact parameters the screen
+ranked - not from the .dat files, which are a lossy coordinate export meant
+for XFLR5.
 """
 
 import argparse
@@ -24,7 +28,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from airfoil_screen import PROFILES, MODEL_SIZE, CONF_MIN
+from common import CONFIG, PROFILES, load_kulfan, load_run_config
 
 # wider sweep than the screen: shows the full drag bucket incl. the
 # lower branch (these sections have zero-lift angles near -8 deg)
@@ -32,11 +36,6 @@ PLOT_ALPHA = np.arange(-10.0, 18.1, 0.5)
 
 HIGHLIGHT = ["#d62728", "#1f77b4", "#2ca02c"]      # ranks 1-3
 GHOST = dict(color="0.65", lw=0.9, alpha=0.55, zorder=1)
-
-
-def load_dat(path):
-    pts = np.loadtxt(path, skiprows=1)
-    return pts
 
 
 def main():
@@ -48,8 +47,13 @@ def main():
     import aerosandbox as asb
     import neuralfoil as nf
 
+    load_run_config(args.results)
+    kulfan = load_kulfan(args.results)
+    print(f"model_size={CONFIG['model_size']} (from run_config.json)")
+
     xlsx = os.path.join(args.results, "results.xlsx")
-    datd = os.path.join(args.results, "shortlist_dat")
+    plotdir = os.path.join(args.results, "plots")   # all figures live in plots/
+    os.makedirs(plotdir, exist_ok=True)
 
     for pname, prof in PROFILES.items():
         try:
@@ -58,20 +62,42 @@ def main():
             continue
         re_design = prof["re_list"][1]          # middle = design-point Re
 
+        # Resolve the plottable set FIRST, so rank/color/label are indices into
+        # what is actually drawn. Previously `rank` came from enumerate() over
+        # the sheet while names/scores were appended only when the geometry
+        # existed, so one missing entry shifted every colour and label by one.
+        plot_rows = [row for _, row in top.iterrows() if row["name"] in kulfan]
+        missing = len(top) - len(plot_rows)
+        if missing:
+            print(f"  ! {pname}: {missing} candidate(s) missing from "
+                  f"kulfan_params.json - excluded")
+        if not plot_rows:
+            print(f"  ! {pname}: nothing to plot - skipped")
+            continue
+
         fig, ax = plt.subplots(2, 2, figsize=(13, 8.5))
         (ax_geo, ax_cla), (ax_polar, ax_score) = ax
 
         names, scores = [], []
-        for rank, (_, row) in enumerate(top.iterrows()):
+        # Blunt to the manufacturable TE, at THIS element's chord - the section
+        # the screen actually ranked. kulfan_params.json holds the AS-DRAWN
+        # geometry (the blunt is per-element, so one per-name file cannot carry
+        # it), and plotting that raw shows a knife edge that was never screened
+        # and cannot be cut: s1223_v19 at flap2's 110 mm chord is 0.13 mm at the
+        # TE as drawn, 1.50 mm as screened. Plot what was ranked.
+        chord_mm = prof["chord"] * 1000.0
+        te_needed = CONFIG["te_min_mm"] / chord_mm
+
+        for rank, row in enumerate(plot_rows):
             name = row["name"]
-            dat = os.path.join(datd, f"{name}.dat")
-            if not os.path.exists(dat):
-                continue
-            coords = load_dat(dat)
-            af = asb.Airfoil(name=name, coordinates=coords)
-            aero = nf.get_aero_from_airfoil(af, alpha=PLOT_ALPHA, Re=re_design,
-                                            model_size=MODEL_SIZE)
-            m = np.asarray(aero["analysis_confidence"]) >= CONF_MIN
+            kp = dict(kulfan[name])
+            kp["TE_thickness"] = max(float(kp["TE_thickness"]), te_needed)
+            af = asb.KulfanAirfoil(name=name, **kp)
+            coords = np.array(af.coordinates)
+            aero = nf.get_aero_from_kulfan_parameters(
+                kulfan_parameters=kp, alpha=PLOT_ALPHA, Re=re_design,
+                model_size=CONFIG["model_size"])
+            m = np.asarray(aero["analysis_confidence"]) >= CONFIG["conf_min"]
             cl = np.asarray(aero["CL"])[m]
             cd = np.asarray(aero["CD"])[m]
             al = PLOT_ALPHA[m]
@@ -98,7 +124,9 @@ def main():
         ax_score.set_yticklabels(names, fontsize=8)
         ax_score.invert_yaxis()
         ax_score.set_xlabel(f"score_{pname}")
-        ax_score.set_xlim(min(scores) * 0.95, max(scores) * 1.02)
+        lo, hi = min(scores), max(scores)
+        if hi > lo:                              # single candidate -> degenerate xlim
+            ax_score.set_xlim(lo * 0.95, hi * 1.02)
 
         # targets / reference lines
         ax_cla.axhline(prof["cl_target"], color="0.3", ls="--", lw=1)
@@ -107,7 +135,8 @@ def main():
         ax_polar.axhline(prof["cl_target"], color="0.3", ls="--", lw=1)
 
         ax_geo.set_aspect("equal")
-        ax_geo.set_title("geometry", fontsize=10)
+        ax_geo.set_title(f"geometry (blunted to {CONFIG['te_min_mm']:.1f} mm TE, "
+                         f"as screened & cut)", fontsize=10)
         ax_cla.set_title(f"CL vs alpha  (Re {re_design//1000}k)", fontsize=10)
         ax_cla.set_xlabel("alpha [deg]"); ax_cla.set_ylabel("CL")
         ax_polar.set_title("drag polar", fontsize=10)
@@ -122,7 +151,7 @@ def main():
             f"CL target {prof['cl_target']}, top {len(names)} of shortlist",
             fontsize=12)
         fig.tight_layout()
-        out = os.path.join(args.results, f"compare_{pname}.png")
+        out = os.path.join(plotdir, f"compare_{pname}.png")
         fig.savefig(out, dpi=130)
         plt.close(fig)
         print(f"wrote {out}")

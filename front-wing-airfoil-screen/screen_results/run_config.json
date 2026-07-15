@@ -1,0 +1,16 @@
+{
+  "model_size": "xxxlarge",
+  "conf_min": 0.85,
+  "min_valid_frac": 0.6,
+  "camber_min": 0.015,
+  "band_points": 5,
+  "te_min_mm": 1.5,
+  "trunc_max_frac": 0.03,
+  "gate_n_crit": 6.0,
+  "gate_xtr": 0.3,
+  "gate_margin": 0.0,
+  "abuse_xtr": 0.05,
+  "abuse_n_crit": 9.0,
+  "track_n_crit": 6.0,
+  "clean_n_crit": 9.0
+}

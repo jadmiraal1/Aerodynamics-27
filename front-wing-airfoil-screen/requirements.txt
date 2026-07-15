@@ -1,5 +1,8 @@
 # FSAE front-wing airfoil screen - tested versions (Jul 2026)
-# Core aero (pinned: results should be reproducible across machines)
+#   pip install -r requirements.txt
+
+# Core aero. PINNED: the whole point is that a shortlist is reproducible on
+# another machine. An unpinned surrogate would quietly re-rank the wing.
 neuralfoil==0.3.2
 aerosandbox==4.2.10
 
@@ -9,3 +12,16 @@ pandas>=2.0
 openpyxl>=3.1
 matplotlib>=3.7
 tqdm>=4.65
+
+# CFD meshing stage (mesh_section.py). Runs by default in run_pipeline.py.
+#
+# LINUX ONLY: the gmsh wheel links against system GL libraries that pip cannot
+# install. If `import gmsh` fails with "libGLU.so.1: cannot open shared object
+# file", install them:
+#     sudo apt-get install libglu1-mesa libxcursor1 libxinerama1 libxft2
+# Windows and macOS wheels bundle these - nothing extra to do.
+#
+# Not pinned: gmsh affects mesh generation, not the ranking, so a version bump
+# cannot silently change which airfoil wins. If you need bit-identical meshes
+# across machines (e.g. for a CFD convergence study), pin it here.
+gmsh>=4.13

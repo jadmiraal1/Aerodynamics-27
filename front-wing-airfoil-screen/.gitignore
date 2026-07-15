@@ -1,3 +1,32 @@
 __pycache__/
 *.pyc
 .venv/
+
+# ---------------------------------------------------------------------------
+# GENERATED PIPELINE OUTPUT
+#
+# Derived data. Rebuild it (`python run_pipeline.py`), do not commit it.
+#
+# Committing it is how the repo ended up with 102 stale knife-edge .dat files
+# and 90 orphaned polar plots sitting indistinguishably beside the current ones
+# - artifacts of runs made before the TE blunt existed. Anyone opening one of
+# those .dat files in XFLR5 would have validated a section that was never
+# screened and cannot be manufactured.
+#
+# The screen now purges plots/ and shortlist_dat/ on every run, so they are
+# always rebuilt from scratch. Keeping them out of git keeps it that way.
+# ---------------------------------------------------------------------------
+screen_results*/plots/
+screen_results*/shortlist_dat/
+screen_results*/mesh_out/
+screen_results*/*.png
+screen_results_smoke/
+mesh_out/
+
+# What IS worth committing, and why (these are NOT ignored):
+#   results.xlsx        the ranking itself
+#   run_config.json     the exact config that produced it - reproducibility
+#   kulfan_params.json  the exact ranked geometry; everything else derives from
+#                       it, so the .dat files and plots are regenerable and the
+#                       geometry is not lost by ignoring them
+#   *.csv               robustness_summary, weight_sensitivity
